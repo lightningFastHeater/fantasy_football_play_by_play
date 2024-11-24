@@ -13,8 +13,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-
-       const Intro = () => (
+        const Intro = () => (
             <div className="bg-gray-50 p-4 mb-6 rounded-lg text-sm">
                 <p>My name is Heaton and I'm an 8th grader that loves fantasy football. I built this app as a way to explore scoring.</p>
                 <p className="mt-2">You can look at the source code here: <a href="https://github.com/lightningFastHeater/fantasy_football_play_by_play" className="text-blue-600 hover:underline">GitHub Repository</a></p>
@@ -24,59 +23,38 @@
         const WeeklyTracker = () => {
             const [loading, setLoading] = React.useState(false);
             const [games, setGames] = React.useState({});
-            const [selectedWeek, setSelectedWeek] = React.useState(1);
+            const [selectedWeek, setSelectedWeek] = React.useState(1); // Default to Week 1
             const [selectedGame, setSelectedGame] = React.useState(null);
             const [playByPlay, setPlayByPlay] = React.useState([]);
             const [playerPoints, setPlayerPoints] = React.useState({});
 
-            // Load initial data
             React.useEffect(() => {
                 fetchGames();
             }, []);
 
-            // Load play data when game is selected
             React.useEffect(() => {
                 if (selectedGame) {
                     fetchPlayByPlay(selectedGame);
                 }
             }, [selectedGame]);
 
-            // Fetch all weeks of games
-const fetchGames = async () => {
-    setLoading(true);
-    try {
-        const allGames = {};
-        for (let week = 1; week <= 18; week++) {
-            const response = await fetch(
-                `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?` +
-                `seasontype=2&week=${week}`
-            );
-            const data = await response.json();
-            if (data.events?.length > 0) {
-                allGames[week] = data.events;
-            }
-        }
-        setGames(allGames);
-    } catch (error) {
-        console.error('Error fetching games:', error);
-    } finally {
-        setLoading(false);
-    }
-};
-
-            // Fetch play by play data
-            const fetchPlayByPlay = async (gameId) => {
+            const fetchGames = async () => {
                 setLoading(true);
                 try {
-                    const response = await fetch(
-                        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`
-                    );
-                    const data = await response.json();
-                    const plays = data.drives?.previous?.map(drive => drive.plays).flat() || [];
-                    setPlayByPlay(plays);
-                    processPlays(plays);
+                    const allGames = {};
+                    for (let week = 1; week <= 18; week++) {
+                        const response = await fetch(
+                            `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?` +
+                            `seasontype=2&week=${week}`
+                        );
+                        const data = await response.json();
+                        if (data.events?.length > 0) {
+                            allGames[week] = data.events;
+                        }
+                    }
+                    setGames(allGames);
                 } catch (error) {
-                    console.error('Error fetching play data:', error);
+                    console.error('Error fetching games:', error);
                 } finally {
                     setLoading(false);
                 }
@@ -98,43 +76,42 @@ const fetchGames = async () => {
                 setPlayerPoints(playerTotals);
             };
 
+            const fetchPlayByPlay = async (gameId) => {
+                setLoading(true);
+                try {
+                    const response = await fetch(
+                        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gameId}`
+                    );
+                    const data = await response.json();
+                    
+                    const plays = data.drives?.previous?.map(drive => drive.plays).flat() || [];
+                    setPlayByPlay(plays);
+                    processPlays(plays);
+                } catch (error) {
+                    console.error('Error fetching play data:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             const calculatePlayPoints = (play) => {
                 if (!play.text) return null;
                 const points = [];
                 const text = play.text;
 
-                // Extract yardage
                 const getYards = (text) => {
                     const yardsMatch = text.match(/for (-?\d+) yards?/);
                     return yardsMatch ? parseInt(yardsMatch[1]) : 0;
                 };
-
-                // Handle rushing plays
-                const rushMatch = text.match(/^([A-Z]\.[A-Za-z]+) (?:left|right|up)/);
-                if (rushMatch) {
-                    const yards = getYards(text);
-                    let rushPoints = (yards * 0.1); // 0.1 points per rushing yard
-
-                    // Add TD points if scored
-                    if (text.includes('TOUCHDOWN') || text.includes(' Yd Rush')) {
-                        rushPoints += 6;
-                    }
-
-                    points.push({
-                        player: rushMatch[1],
-                        points: rushPoints,
-                        description: `Rush: ${yards} yards${text.includes('TOUCHDOWN') ? ' + TD' : ''}`
-                    });
-                }
 
                 // Handle passing plays
                 const passMatch = text.match(/([A-Z]\.[A-Za-z]+) pass .* to ([A-Z]\.[A-Za-z]+)/);
                 if (passMatch && !text.includes('incomplete')) {
                     const [_, passer, receiver] = passMatch;
                     const yards = getYards(text);
-
+                    
                     // QB Points
-                    let passerPoints = (yards * 0.04); // 0.04 points per passing yard
+                    let passerPoints = (yards * 0.04);
                     if (text.includes('TOUCHDOWN')) {
                         passerPoints += 4;
                     }
@@ -146,7 +123,7 @@ const fetchGames = async () => {
 
                     // Receiver Points
                     let receiverPoints = 1; // PPR point
-                    receiverPoints += (yards * 0.1); // 0.1 points per receiving yard
+                    receiverPoints += (yards * 0.1);
                     if (text.includes('TOUCHDOWN')) {
                         receiverPoints += 6;
                     }
@@ -157,10 +134,26 @@ const fetchGames = async () => {
                     });
                 }
 
+                // Handle rushing plays
+                const rushMatch = text.match(/^([A-Z]\.[A-Za-z]+) (?:left|right|up)/);
+                if (rushMatch) {
+                    const yards = getYards(text);
+                    let rushPoints = (yards * 0.1);
+                    
+                    if (text.includes('TOUCHDOWN') || text.includes(' Yd Rush')) {
+                        rushPoints += 6;
+                    }
+
+                    points.push({
+                        player: rushMatch[1],
+                        points: rushPoints,
+                        description: `Rush: ${yards} yards${text.includes('TOUCHDOWN') ? ' + TD' : ''}`
+                    });
+                }
+
                 return points;
             };
 
-            // Loading screen component
             const LoadingScreen = () => (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl">
@@ -173,21 +166,20 @@ const fetchGames = async () => {
             return (
                 <div className="max-w-7xl mx-auto p-4">
                     {loading && <LoadingScreen />}
-
+                    
                     <h1 className="text-2xl font-bold text-center mb-6">Fantasy Football Tracker</h1>
-
+                    
                     <Intro />
 
-                    {/* Week Selection */}
                     <div className="flex flex-wrap gap-1 mb-4 border-b">
-                        {Object.keys(games).map(week => (
-                            <div
+                        {Array.from({length: 18}, (_, i) => i + 1).map(week => (
+                            <div 
                                 key={week}
                                 className={`px-4 py-2 cursor-pointer
-                                    ${selectedWeek === parseInt(week) ?
-                                        'border-b-2 border-blue-500 font-bold' :
+                                    ${selectedWeek === week ? 
+                                        'border-b-2 border-blue-500 font-bold' : 
                                         'hover:bg-gray-100'}`}
-                                onClick={() => setSelectedWeek(parseInt(week))}
+                                onClick={() => setSelectedWeek(week)}
                             >
                                 Week {week}
                             </div>
@@ -195,10 +187,9 @@ const fetchGames = async () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Games List */}
                         <div>
                             {selectedWeek && games[selectedWeek]?.map(game => (
-                                <div
+                                <div 
                                     key={game.id}
                                     onClick={() => setSelectedGame(game.id)}
                                     className={`p-4 mb-2 border rounded cursor-pointer
@@ -223,22 +214,21 @@ const fetchGames = async () => {
                             ))}
                         </div>
 
-                        {/* Play by Play & Points */}
                         {selectedGame && (
                             <div>
                                 <div className="bg-white rounded-lg shadow-lg">
                                     <div className="p-4 border-b">
                                         <h2 className="text-lg font-bold">Play by Play & Fantasy Points</h2>
                                     </div>
-
+                                    
                                     <div className="max-h-[600px] overflow-y-auto p-4">
                                         {playByPlay.map((play, index) => {
                                             const points = calculatePlayPoints(play);
                                             return (
-                                                <div
+                                                <div 
                                                     key={index}
                                                     className={`mb-3 p-3 rounded
-                                                        ${play.text?.includes('TOUCHDOWN') ?
+                                                        ${play.text?.includes('TOUCHDOWN') ? 
                                                             'bg-green-100' : 'bg-gray-50'}`}
                                                 >
                                                     <div className="font-medium">
@@ -246,13 +236,13 @@ const fetchGames = async () => {
                                                     </div>
                                                     <p className="text-sm my-1">{play.text}</p>
                                                     {points?.map((point, i) => (
-                                                        <div key={i}
+                                                        <div key={i} 
                                                             className="text-sm text-blue-600 ml-2 border-l-2 border-blue-200 pl-2"
                                                         >
                                                             <span className="font-medium">
-                                                                {point.player}:
+                                                                {point.player}
                                                             </span>
-                                                            {' '}{point.description}
+                                                            {' '}{point.description} 
                                                             ({point.points > 0 ? '+' : ''}
                                                             {point.points.toFixed(2)} pts)
                                                         </div>
@@ -262,13 +252,12 @@ const fetchGames = async () => {
                                         })}
                                     </div>
 
-                                    {/* Player Totals */}
                                     <div className="border-t p-4 bg-gray-50">
                                         <h3 className="font-bold mb-2">Game Totals</h3>
                                         {Object.entries(playerPoints)
                                             .sort((a, b) => b[1] - a[1])
                                             .map(([player, points]) => (
-                                                <div key={player}
+                                                <div key={player} 
                                                     className="flex justify-between items-center mb-1"
                                                 >
                                                     <span className="font-medium">{player}</span>
