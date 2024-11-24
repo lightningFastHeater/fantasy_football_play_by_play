@@ -24,7 +24,7 @@
         const WeeklyTracker = () => {
             const [loading, setLoading] = React.useState(false);
             const [games, setGames] = React.useState({});
-            const [selectedWeek, setSelectedWeek] = React.useState(null);
+            const [selectedWeek, setSelectedWeek] = React.useState(1);
             const [selectedGame, setSelectedGame] = React.useState(null);
             const [playByPlay, setPlayByPlay] = React.useState([]);
             const [playerPoints, setPlayerPoints] = React.useState({});
@@ -42,30 +42,27 @@
             }, [selectedGame]);
 
             // Fetch all weeks of games
-            const fetchGames = async () => {
-                setLoading(true);
-                try {
-                    const allGames = {};
-                    for (let week = 1; week <= 18; week++) {
-                        const response = await fetch(
-                            `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?` +
-                            `seasontype=2&week=${week}`
-                        );
-                        const data = await response.json();
-                        if (data.events?.length > 0) {
-                            allGames[week] = data.events;
-                        }
-                    }
-                    setGames(allGames);
-                    // Set to most recent week
-                    const mostRecentWeek = Math.max(...Object.keys(allGames).map(Number));
-                    setSelectedWeek(mostRecentWeek);
-                } catch (error) {
-                    console.error('Error fetching games:', error);
-                } finally {
-                    setLoading(false);
-                }
-            };
+const fetchGames = async () => {
+    setLoading(true);
+    try {
+        const allGames = {};
+        for (let week = 1; week <= 18; week++) {
+            const response = await fetch(
+                `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?` +
+                `seasontype=2&week=${week}`
+            );
+            const data = await response.json();
+            if (data.events?.length > 0) {
+                allGames[week] = data.events;
+            }
+        }
+        setGames(allGames);
+    } catch (error) {
+        console.error('Error fetching games:', error);
+    } finally {
+        setLoading(false);
+    }
+};
 
             // Fetch play by play data
             const fetchPlayByPlay = async (gameId) => {
