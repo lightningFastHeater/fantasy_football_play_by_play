@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Game Story</title>
+    
+    <!-- Load React -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Load Babel for JSX -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    
+    <!-- Load PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const GameStoryAnalyzer = () => {
+            const [plays, setPlays] = React.useState([]);
+            const [games, setGames] = React.useState([]);
+            const [selectedGame, setSelectedGame] = React.useState('');
+            const [playerPoints, setPlayerPoints] = React.useState({});
+
+            // Scoring rules (PPR)
+            const scoringRules = {
+                passingYards: 0.04,  // 1 point per 25 yards
+                passingTD: 4,
+                rushingYards: 0.1,   // 1 point per 10 yards
+                rushingTD: 6,
+                reception: 1,        // PPR
+                receivingYards: 0.1, // 1 point per 10 yards
+                receivingTD: 6
+            };
+
+            const handleDataInput = (event) => {
+                const input = event.target.value;
+                Papa.parse(input, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        setPlays(results.data);
+                        
+                        // Extract unique games
+                        const uniqueGames = [...new Set(results.data.map(play => play.GameId))];
+                        const gamesList = uniqueGames.map(gameId => {
+                            const gamePlays = results.data.filter(play => play.GameId === gameId);
+                            const teams = [...new Set(gamePlays.map(play => play.OffenseTeam))];
+                            return {
+                                id: gameId,
+                                date: gamePlays[0].GameDate,
+                                teams: teams.join(' vs ')
+                            };
+                        });
+                        setGames(gamesList);
+                    }
+                });
+            };
+
+            const calculatePoints = (play) => {
+                if (play.IsNoPlay === '1') return null;
+                
+                const yards = parseInt(play.Yards) || 0;
+                let points = 0;
+                let description = '';
+                let playerName = '';
+
+                // Extract player info from description
+                const playerMatch = play.Description.match(/\d+-([A-Z]\.[A-Z]+)/);
+                if (!playerMatch) return null;
+                playerName = playerMatch[1];
+
+                if (play.IsRush === '1') {
+                    points += yards * scoringRules.rushingYards;
+                    description = `Rush for ${yards} yards`;
+                    if (play.IsTouchdown === '1') {
+                        points += scoringRules.rushingTD;
+                        description += ' and a TOUCHDOWN';
+                    }
+                } else if (play.IsPass === '1' && play.IsIncomplete !== '1') {
+                    // Handle completed passes
+                    const receiverMatch = play.Description.match(/TO (\d+-[A-Z]\.[A-Z]+)/);
+                    if (receiverMatch) {
+                        // Points for receiver
+                        const receiverName = receiverMatch[1].split('-')[1];
+                        const receiverPoints = {
+                            points: scoringRules.reception + (yards * scoringRules.receivingYards),
+                            description: `Reception for ${yards} yards`,
+                            playerName: receiverName
+                        };
+                        if (play.IsTouchdown === '1') {
+                            receiverPoints.points += scoringRules.receivingTD;
+                            receiverPoints.description += ' and a TOUCHDOWN';
+                        }
+                        
+                        // Points for quarterback
+                        points += yards * scoringRules.passingYards;
+                        description = `Pass completed for ${yards} yards`;
+                        if (play.IsTouchdown === '1') {
+                            points += scoringRules.passingTD;
+                            description += ' and a TOUCHDOWN';
+                        }
+                        
+                        return [
+                            { points, description, playerName },
+                            receiverPoints
+                        ];
+                    }
+                }
+
+                return points > 0 ? [{ points, description, playerName }] : null;
+            };
+
+            const getPlayStyle = (play) => {
+                if (play.IsTouchdown === '1') {
+                    return 'bg-green-100 border-l-4 border-green-500';
+                }
+                if (play.IsRush === '1') {
+                    return parseInt(play.Yards) >= 10 ? 'bg-blue-100' : 'bg-blue-50';
+                }
+                if (play.IsPass === '1') {
+                    if (play.IsIncomplete === '1') {
+                        return 'bg-red-50';
+                    }
+                    return parseInt(play.Yards) >= 20 ? 'bg-purple-100' : 'bg-purple-50';
+                }
+                if (play.IsSack === '1') {
+                    return 'bg-orange-100';
+                }
+                return 'bg-gray-50';
+            };
+
+            React.useEffect(() => {
+                if (selectedGame && plays.length > 0) {
+                    const gamePlays = plays
+                        .filter(play => play.GameId === selectedGame)
+                        .sort((a, b) => {
+                            if (a.Quarter !== b.Quarter) return a.Quarter - b.Quarter;
+                            if (a.Minute !== b.Minute) return b.Minute - a.Minute;
+                            return b.Second - a.Second;
+                        });
+                    
+                    const runningPoints = {};
+                    
+                    gamePlays.forEach(play => {
+                        const pointsScored = calculatePoints(play);
+                        if (pointsScored) {
+                            pointsScored.forEach(score => {
+                                if (!runningPoints[score.playerName]) {
+                                    runningPoints[score.playerName] = {
+                                        total: 0,
+                                        plays: []
+                                    };
+                                }
+                                runningPoints[score.playerName].total += score.points;
+                                runningPoints[score.playerName].plays.push({
+                                    quarter: play.Quarter,
+                                    points: score.points,
+                                    total: runningPoints[score.playerName].total,
+                                    description: score.description
+                                });
+                            });
+                        }
+                    });
+                    
+                    setPlayerPoints(runningPoints);
+                }
+            }, [selectedGame, plays]);
+
+            const renderQuarter = (quarter, plays) => (
+                <div key={quarter} className="mb-8">
+                    <h3 className="text-xl font-bold mb-4">Quarter {quarter}</h3>
+                    <div className="space-y-2">
+                        {plays.map((play, index) => (
+                            <div 
+                                key={index}
+                                className={`p-4 rounded-lg ${getPlayStyle(play)}`}
+                            >
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold">
+                                                {play.Minute}:{play.Second.padStart(2, '0')}
+                                            </span>
+                                            <span className="px-2 py-1 text-sm bg-white rounded">
+                                                {play.Yards ? `${play.Yards} yards` : ''}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm">{play.Description}</p>
+                                        {calculatePoints(play)?.map((score, i) => (
+                                            <p key={i} className="text-sm text-blue-600 font-medium mt-1">
+                                                {score.playerName}: {score.description} 
+                                                (+{score.points.toFixed(1)} pts, 
+                                                Total: {playerPoints[score.playerName]?.plays.find(p => 
+                                                    p.quarter === parseInt(play.Quarter) && 
+                                                    p.description === score.description
+                                                )?.total.toFixed(1)} pts)
+                                            </p>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="max-w-4xl mx-auto p-4">
+                    <div className="bg-white rounded-lg shadow-lg">
+                        <div className="p-6">
+                            <h1 className="text-2xl font-bold text-center mb-6">
+                                Fantasy Football Game Story
+                            </h1>
+                            <div className="space-y-6">
+                                {/* Data Input */}
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-medium">
+                                        Paste Play-by-Play Data:
+                                    </label>
+                                    <textarea 
+                                        className="w-full h-32 p-2 border rounded"
+                                        onChange={handleDataInput}
+                                        placeholder="Paste your play-by-play data here..."
+                                    />
+                                </div>
+
+                                {/* Game Selection */}
+                                {games.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-medium">Select Game:</label>
+                                        <select 
+                                            className="w-full p-2 border rounded"
+                                            value={selectedGame}
+                                            onChange={(e) => setSelectedGame(e.target.value)}
+                                        >
+                                            <option value="">Select a game...</option>
+                                            {games.map(game => (
+                                                <option key={game.id} value={game.id}>
+                                                    {game.date} - {game.teams}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* Color Legend */}
+                                {selectedGame && (
+                                    <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                                        <div className="space-y-1">
+                                            <div className="h-4 w-full bg-green-100 rounded"></div>
+                                            <span className="text-sm">Touchdown</span>
+                                            <div className="h-4 w-full bg-blue-100 rounded"></div>
+                                            <span className="text-sm">Big Rush (10+ yards)</span>
+                                            <div className="h-4 w-full bg-blue-50 rounded"></div>
+                                            <span className="text-sm">Rush</span>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="h-4 w-full bg-purple-100 rounded"></div>
+                                            <span className="text-sm">Big Pass (20+ yards)</span>
+                                            <div className="h-4 w-full bg-red-50 rounded"></div>
+                                            <span className="text-sm">Incomplete Pass</span>
+                                            <div className="h-4 w-full bg-orange-100 rounded"></div>
+                                            <span className="text-sm">Sack</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Game Story by Quarter */}
+                                {selectedGame && plays.length > 0 && (
+                                    <div className="space-y-6">
+                                        {[1, 2, 3, 4].map(quarter => 
+                                            renderQuarter(quarter, 
+                                                plays
+                                                    .filter(play => play.GameId === selectedGame && play.Quarter === quarter.toString())
+                                                    .sort((a, b) => b.Minute - a.Minute || b.Second - a.Second)
+                                            )
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Player Totals */}
+                                {Object.keys(playerPoints).length > 0 && (
+                                    <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                                        <h3 className="text-xl font-bold mb-4">Final Fantasy Points</h3>
+                                        <div className="space-y-4">
+                                            {Object.entries(playerPoints)
+                                                .sort((a, b) => b[1].total - a[1].total)
+                                                .map(([player, data]) => (
+                                                    <div key={player} className="flex justify-between items-center">
+                                                        <span className="font-medium">{player}</span>
+                                                        <span className="font-bold text-blue-600">
+                                                            {data.total.toFixed(1)} pts
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<GameStoryAnalyzer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
