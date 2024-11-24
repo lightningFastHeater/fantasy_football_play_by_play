@@ -1,20 +1,12 @@
-# Fantasy Football Play by Play
+# NFL Fantasy Football Point Tracker
 
-By Heaton
+A web tool I built to help understand how fantasy football scoring works.
 
-A simple tool that lets you see fantasy football points as they happen in NFL games! 
+## Why I Made This
+I manage a fantasy team and compete against my friends every week. We're always checking scores and debating trades. I thought it would be fun to build my own web app that shows exactly how fantasy points happen during real NFL games.
 
 ## What It Does
-- Shows all NFL games by week
-- Tracks points for every play
-- Adds up fantasy points for each player
-- Shows TDs, catches, and big plays in different colors
+You can see fantasy points happening in real NFL games. See which plays are worth points, how yards add up, and track your favorite players. The tool shows all current and past games using ESPN's API, calculates points for each play, and gives running totals.
 
-## How It Works
-1. Pick a week
-2. Click on any game
-3. Watch the points add up play by play
-
-> Uses standard PPR scoring (Points Per Reception)
-
-Made with React and ESPN's free data 
+## Using It
+Pick any NFL week and click a game. You'll see every play that earned fantasy points and how they were scored. The important plays show up in different colors so they're easy to spot.
